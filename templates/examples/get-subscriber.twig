@@ -1,0 +1,260 @@
+{#
+ # Get Subscriber Example
+ # 
+ # Shows how to get full subscriber details by email address
+ #}
+{% extends "_layout" %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">Get Subscriber Details</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Lookup Subscriber</h5>
+                    <form id="get-subscriber-form">
+                        {{ csrfInput() }}
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="email" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Get Details</button>
+                    </form>
+                </div>
+            </div>
+            
+            {# Additional Actions #}
+            <div class="card mt-3 d-none" id="actions-card">
+                <div class="card-body">
+                    <h5 class="card-title">Actions</h5>
+                    <button type="button" class="btn btn-sm btn-secondary" id="get-activity">Get Activity</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="get-tags">Get Tags</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="get-events">Get Events</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div id="result-container" class="d-none">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Subscriber Details</h5>
+                        <div id="subscriber-content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Code Example #}
+    <div class="mt-5">
+        <h2>Code Example</h2>
+        <pre><code class="language-javascript">// Get full subscriber details
+const response = await mailchimp.checkSubscription(email);
+
+if (response.success) {
+    const subscriber = response.data;
+    
+    // Access subscriber properties
+    console.log('Email:', subscriber.email_address);
+    console.log('Status:', subscriber.status);
+    console.log('Member Rating:', subscriber.member_rating);
+    console.log('VIP:', subscriber.vip);
+    
+    // Merge fields (custom fields)
+    if (subscriber.merge_fields) {
+        console.log('First Name:', subscriber.merge_fields.FNAME);
+        console.log('Last Name:', subscriber.merge_fields.LNAME);
+    }
+    
+    // Stats
+    console.log('Stats:', subscriber.stats);
+}</code></pre>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('get-subscriber-form');
+    const resultContainer = document.getElementById('result-container');
+    const subscriberContent = document.getElementById('subscriber-content');
+    const actionsCard = document.getElementById('actions-card');
+    let currentEmail = '';
+    
+    // Initialize API
+    const mailchimp = new MailchimpAPI({
+        csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+        csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+        listId: '{{ getenv("MAILCHIMP_LIST_ID") }}'
+    });
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        currentEmail = document.getElementById('email').value;
+        
+        try {
+            const response = await mailchimp.checkSubscription(currentEmail);
+            
+            if (response.success) {
+                const subscriber = response.data;
+                
+                let html = `
+                    <div class="mb-3">
+                        <span class="badge bg-${subscriber.status === 'subscribed' ? 'success' : 'warning'}">${subscriber.status}</span>
+                        ${subscriber.vip ? '<span class="badge bg-info ms-2">VIP</span>' : ''}
+                    </div>
+                    
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Email:</th>
+                            <td>${subscriber.email_address}</td>
+                        </tr>
+                        <tr>
+                            <th>Member ID:</th>
+                            <td>${subscriber.id}</td>
+                        </tr>
+                        <tr>
+                            <th>Member Rating:</th>
+                            <td>${'⭐'.repeat(subscriber.member_rating || 0)}</td>
+                        </tr>
+                        <tr>
+                            <th>Email Type:</th>
+                            <td>${subscriber.email_type || 'html'}</td>
+                        </tr>
+                        <tr>
+                            <th>Language:</th>
+                            <td>${subscriber.language || 'en'}</td>
+                        </tr>
+                        <tr>
+                            <th>Subscribed Since:</th>
+                            <td>${new Date(subscriber.timestamp_signup).toLocaleDateString()}</td>
+                        </tr>
+                    </table>
+                    
+                    ${subscriber.merge_fields && Object.keys(subscriber.merge_fields).length > 0 ? `
+                        <h6>Merge Fields</h6>
+                        <table class="table table-sm">
+                            ${Object.entries(subscriber.merge_fields).map(([key, value]) => `
+                                <tr>
+                                    <th>${key}:</th>
+                                    <td>${value || '<em>empty</em>'}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                    ` : ''}
+                    
+                    ${subscriber.stats ? `
+                        <h6>Engagement Stats</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Avg Open Rate:</th>
+                                <td>${(subscriber.stats.avg_open_rate * 100).toFixed(1)}%</td>
+                            </tr>
+                            <tr>
+                                <th>Avg Click Rate:</th>
+                                <td>${(subscriber.stats.avg_click_rate * 100).toFixed(1)}%</td>
+                            </tr>
+                        </table>
+                    ` : ''}
+                `;
+                
+                subscriberContent.innerHTML = html;
+                resultContainer.classList.remove('d-none');
+                actionsCard.classList.remove('d-none');
+                
+            } else {
+                throw new Error(response.error?.detail || 'Subscriber not found');
+            }
+            
+        } catch (error) {
+            subscriberContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error: ${error.message}
+                </div>
+            `;
+            resultContainer.classList.remove('d-none');
+            actionsCard.classList.add('d-none');
+        }
+    });
+    
+    // Get Activity
+    document.getElementById('get-activity').addEventListener('click', async function() {
+        try {
+            const response = await mailchimp.getMemberActivity(currentEmail);
+            if (response.success) {
+                const activities = response.data.activity || [];
+                let html = '<h6>Recent Activity</h6>';
+                if (activities.length > 0) {
+                    html += '<ul class="list-group">';
+                    activities.forEach(activity => {
+                        html += `<li class="list-group-item">
+                            <strong>${activity.action}:</strong> ${activity.title || 'N/A'}<br>
+                            <small class="text-muted">${new Date(activity.timestamp).toLocaleString()}</small>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p>No recent activity</p>';
+                }
+                subscriberContent.innerHTML += html;
+            }
+        } catch (error) {
+            alert('Error getting activity: ' + error.message);
+        }
+    });
+    
+    // Get Tags
+    document.getElementById('get-tags').addEventListener('click', async function() {
+        try {
+            const response = await mailchimp.getTags(currentEmail);
+            if (response.success) {
+                const tags = response.data.tags || [];
+                let html = '<h6 class="mt-3">Tags</h6>';
+                if (tags.length > 0) {
+                    html += tags.map(tag => `<span class="badge bg-primary me-1">${tag.name}</span>`).join('');
+                } else {
+                    html += '<p>No tags assigned</p>';
+                }
+                subscriberContent.innerHTML += html;
+            }
+        } catch (error) {
+            alert('Error getting tags: ' + error.message);
+        }
+    });
+    
+    // Get Events
+    document.getElementById('get-events').addEventListener('click', async function() {
+        try {
+            const response = await mailchimp.getMemberEvents(currentEmail);
+            if (response.success) {
+                const events = response.data.events || [];
+                let html = '<h6 class="mt-3">Recent Events</h6>';
+                if (events.length > 0) {
+                    html += '<ul class="list-group">';
+                    events.forEach(event => {
+                        html += `<li class="list-group-item">
+                            <strong>${event.name}:</strong> ${JSON.stringify(event.properties)}<br>
+                            <small class="text-muted">${new Date(event.occurred_at).toLocaleString()}</small>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p>No recent events</p>';
+                }
+                subscriberContent.innerHTML += html;
+            }
+        } catch (error) {
+            alert('Error getting events: ' + error.message);
+        }
+    });
+});
+</script>
+
+<!-- Include required scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="{{ siteUrl }}mailchimp/resources/js/mailchimp.js"></script>
+{% endblock %}

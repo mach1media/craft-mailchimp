@@ -1,0 +1,275 @@
+{#
+ # Mailchimp Opt-In Validator Component
+ # 
+ # A reusable component that checks email subscription status
+ # and shows appropriate UI based on the status
+ # 
+ # Usage:
+ # {% include 'mailchimp/components/mailchimp-optin-validator' with {
+ #     buttonText: 'Subscribe',
+ #     successMessage: 'You are already subscribed!',
+ #     placeholderText: 'your.email@example.com'
+ # } %}
+ #}
+{% set buttonText = buttonText ?? 'Subscribe' %}
+{% set successMessage = successMessage ?? 'This email address is already subscribed.' %}
+{% set unsubscribedMessage = unsubscribedMessage ?? 'This email address was previously unsubscribed.' %}
+{% set placeholderText = placeholderText ?? 'your.email@example.com' %}
+
+{% css %}
+.mailchimp-validator {
+    max-width: 600px;
+    margin: 0 auto;
+}
+.mailchimp-validator .alert {
+    border: 0;
+    border-radius: 0.5rem;
+}
+.mailchimp-validator .btn {
+    border-radius: 0.375rem;
+}
+{% endcss %}
+
+<div class="mailchimp-validator">
+    
+    {# Initial email check form #}
+    <div id="email-check-form" class="mb-4">
+        <form id="mailchimp-email-form" class="needs-validation" novalidate>
+            {{ csrfInput() }}
+            
+            <div class="mb-3">
+                <div class="input-group">
+                    <input 
+                        type="email" 
+                        class="form-control" 
+                        id="email-input" 
+                        name="email" 
+                        required 
+                        aria-describedby="email-help"
+                        placeholder="{{ placeholderText }}"
+                    >
+                    <button class="btn btn-primary" type="submit" id="check-btn">
+                        <span class="btn-text">{{ buttonText }}</span>
+                        <span class="spinner-border spinner-border-sm d-none ms-2" role="status" aria-hidden="true"></span>
+                    </button>
+                </div>
+                <div class="invalid-feedback"></div>
+            </div>
+        </form>
+    </div>
+
+    {# Loading state #}
+    <div id="loading-state" class="d-none text-center py-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Checking subscription status...</span>
+        </div>
+        <p class="mt-2 text-muted">Checking subscription status...</p>
+    </div>
+
+    {# Already subscribed alert #}
+    <div id="subscribed-alert" class="alert alert-success d-none" role="alert">
+        <h5 class="alert-heading">
+            <i class="fas fa-check-circle me-2"></i>Already Subscribed
+        </h5>
+        <p class="mb-3">{{ successMessage }}</p>
+        <button type="button" class="btn btn-outline-success" id="subscribed-ok-btn">OK</button>
+    </div>
+
+    {# Unsubscribed alert #}
+    <div id="unsubscribed-alert" class="alert alert-warning d-none" role="alert">
+        <h5 class="alert-heading">
+            <i class="fas fa-exclamation-triangle me-2"></i>Previously Unsubscribed
+        </h5>
+        <p class="mb-3">{{ unsubscribedMessage }}</p>
+        <div id="unsubscribe-reason" class="mb-3 small text-muted d-none"></div>
+        <div class="d-flex gap-2">
+            <a href="#" class="btn btn-warning" id="resubscribe-btn" target="_blank">Resubscribe</a>
+            <button type="button" class="btn btn-outline-secondary" id="unsubscribed-cancel-btn">Cancel</button>
+        </div>
+    </div>
+
+    {# Error alert #}
+    <div id="error-alert" class="alert alert-danger d-none" role="alert">
+        <h5 class="alert-heading">
+            <i class="fas fa-exclamation-circle me-2"></i>Error
+        </h5>
+        <p class="mb-3" id="error-message">An error occurred while checking your subscription status.</p>
+        <button type="button" class="btn btn-outline-danger" id="error-ok-btn">Try Again</button>
+    </div>
+
+    {# Success message for new subscribers #}
+    <div id="new-subscriber-success" class="alert alert-success d-none" role="alert">
+        <h5 class="alert-heading">
+            <i class="fas fa-check-circle me-2"></i>Thank You!
+        </h5>
+        <p class="mb-0">Please check your email to confirm your subscription.</p>
+    </div>
+
+</div>
+
+{# Include required JavaScript #}
+{% js %}
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if MailchimpAPI is available
+    if (typeof MailchimpAPI === 'undefined') {
+        console.error('MailchimpAPI not found. Please include mailchimp.js');
+        return;
+    }
+    
+    // Initialize Mailchimp API
+    const mailchimp = new MailchimpAPI({
+        csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+        csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+        listId: '{{ getenv("MAILCHIMP_LIST_ID") }}',
+        debug: false
+    });
+    
+    // Get DOM elements
+    const emailForm = document.getElementById('mailchimp-email-form');
+    const emailInput = document.getElementById('email-input');
+    const checkBtn = document.getElementById('check-btn');
+    const btnText = checkBtn.querySelector('.btn-text');
+    const btnSpinner = checkBtn.querySelector('.spinner-border');
+    
+    const emailCheckForm = document.getElementById('email-check-form');
+    const loadingState = document.getElementById('loading-state');
+    const subscribedAlert = document.getElementById('subscribed-alert');
+    const unsubscribedAlert = document.getElementById('unsubscribed-alert');
+    const errorAlert = document.getElementById('error-alert');
+    const newSubscriberSuccess = document.getElementById('new-subscriber-success');
+    
+    const resubscribeBtn = document.getElementById('resubscribe-btn');
+    const unsubscribeReason = document.getElementById('unsubscribe-reason');
+    const errorMessage = document.getElementById('error-message');
+    
+    // Hide all states except initial form
+    function resetView() {
+        emailCheckForm.classList.remove('d-none');
+        loadingState.classList.add('d-none');
+        subscribedAlert.classList.add('d-none');
+        unsubscribedAlert.classList.add('d-none');
+        errorAlert.classList.add('d-none');
+        newSubscriberSuccess.classList.add('d-none');
+        
+        checkBtn.disabled = false;
+        btnText.textContent = '{{ buttonText }}';
+        btnSpinner.classList.add('d-none');
+        
+        emailInput.classList.remove('is-invalid');
+        emailForm.classList.remove('was-validated');
+    }
+    
+    // Show loading state
+    function showLoading() {
+        emailCheckForm.classList.add('d-none');
+        loadingState.classList.remove('d-none');
+        
+        checkBtn.disabled = true;
+        btnText.textContent = 'Checking...';
+        btnSpinner.classList.remove('d-none');
+    }
+    
+    // Show subscribed state
+    function showSubscribed() {
+        loadingState.classList.add('d-none');
+        subscribedAlert.classList.remove('d-none');
+    }
+    
+    // Show unsubscribed state
+    function showUnsubscribed(signupUrl, reason = null) {
+        loadingState.classList.add('d-none');
+        unsubscribedAlert.classList.remove('d-none');
+        
+        // Set resubscribe URL
+        resubscribeBtn.href = signupUrl;
+        
+        // Show unsubscribe reason if available
+        if (reason) {
+            unsubscribeReason.textContent = `Reason: ${reason}`;
+            unsubscribeReason.classList.remove('d-none');
+        } else {
+            unsubscribeReason.classList.add('d-none');
+        }
+    }
+    
+    // Show error state
+    function showError(message) {
+        loadingState.classList.add('d-none');
+        errorAlert.classList.remove('d-none');
+        errorMessage.textContent = message;
+    }
+    
+    // Show success for new subscriber
+    async function subscribeEmail(email) {
+        try {
+            const response = await mailchimp.subscribeMember(email);
+            
+            if (response.success) {
+                loadingState.classList.add('d-none');
+                newSubscriberSuccess.classList.remove('d-none');
+            } else {
+                showError(response.error?.detail || 'Failed to subscribe. Please try again.');
+            }
+        } catch (error) {
+            showError('Unable to subscribe. Please try again.');
+        }
+    }
+    
+    // Handle form submission
+    emailForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const email = emailInput.value.trim();
+        
+        // Validate email
+        const validation = mailchimp.validateEmail(email);
+        if (!validation.valid) {
+            emailInput.classList.add('is-invalid');
+            emailInput.nextElementSibling.nextElementSibling.textContent = validation.error;
+            emailForm.classList.add('was-validated');
+            return;
+        }
+        
+        // Clear validation
+        emailInput.classList.remove('is-invalid');
+        emailForm.classList.remove('was-validated');
+        
+        // Show loading
+        showLoading();
+        
+        try {
+            // Check subscription status
+            const status = await mailchimp.getSubscriptionStatus(email);
+            
+            if (!status.found) {
+                // Email not found - subscribe them
+                await subscribeEmail(email);
+            } else if (status.subscribed) {
+                // Already subscribed
+                showSubscribed();
+            } else if (status.unsubscribed) {
+                // Previously unsubscribed - get signup URL
+                try {
+                    const signupUrl = await mailchimp.getListSignupUrl(mailchimp.listId) || '{{ getenv("MAILCHIMP_SIGNUP_URL") }}';
+                    showUnsubscribed(signupUrl);
+                } catch (urlError) {
+                    // Fallback to env URL
+                    showUnsubscribed('{{ getenv("MAILCHIMP_SIGNUP_URL") }}');
+                }
+            } else {
+                // Other status (pending, cleaned, etc.)
+                showError(`Your subscription status is: ${status.status}. Please contact support for assistance.`);
+            }
+            
+        } catch (error) {
+            console.error('Subscription check error:', error);
+            showError('Unable to check subscription status. Please try again.');
+        }
+    });
+    
+    // Button event handlers
+    document.getElementById('subscribed-ok-btn').addEventListener('click', resetView);
+    document.getElementById('unsubscribed-cancel-btn').addEventListener('click', resetView);
+    document.getElementById('error-ok-btn').addEventListener('click', resetView);
+});
+{% endjs %}

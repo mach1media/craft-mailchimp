@@ -1,0 +1,292 @@
+{#
+ # List Info Example
+ # 
+ # Shows how to get information about a Mailchimp list
+ #}
+{% extends "_layout" %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">List Information</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Get List Details</h5>
+                    <form id="get-list-form">
+                        {{ csrfInput() }}
+                        <div class="mb-3">
+                            <label for="list-id" class="form-label">List ID</label>
+                            <input type="text" class="form-control" id="list-id" 
+                                   value="{{ getenv('MAILCHIMP_LIST_ID') }}"
+                                   placeholder="Enter list ID or leave blank for default">
+                            <small class="text-muted">Leave blank to use default list from environment</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Get List Info</button>
+                    </form>
+                </div>
+            </div>
+            
+            {# Quick Actions #}
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <button type="button" class="btn btn-sm btn-secondary" id="get-all-lists">Get All Lists</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="get-segments">Get Segments</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="get-interest-categories">Get Interest Categories</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div id="result-container" class="d-none">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">List Details</h5>
+                        <div id="list-content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Code Example #}
+    <div class="mt-5">
+        <h2>Code Example</h2>
+        <pre><code class="language-javascript">// Get list information
+const response = await mailchimp.getList(listId);
+
+if (response.success) {
+    const list = response.data;
+    
+    console.log('List Name:', list.name);
+    console.log('Member Count:', list.stats.member_count);
+    console.log('Campaign Count:', list.stats.campaign_count);
+    console.log('Signup Form URL:', list.subscribe_url_long);
+    
+    // Get all lists
+    const allLists = await mailchimp.getLists();
+    
+    // Get segments
+    const segments = await mailchimp.getSegments();
+    
+    // Get interest categories (groups)
+    const categories = await mailchimp.getInterestCategories();
+}</code></pre>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('get-list-form');
+    const resultContainer = document.getElementById('result-container');
+    const listContent = document.getElementById('list-content');
+    
+    // Initialize API
+    const mailchimp = new MailchimpAPI({
+        csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+        csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+        listId: '{{ getenv("MAILCHIMP_LIST_ID") }}'
+    });
+    
+    async function displayListInfo(listId) {
+        try {
+            const response = await mailchimp.getList(listId);
+            
+            if (response.success) {
+                const list = response.data;
+                
+                let html = `
+                    <table class="table">
+                        <tr>
+                            <th>List Name:</th>
+                            <td><strong>${list.name}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>List ID:</th>
+                            <td><code>${list.id}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Date Created:</th>
+                            <td>${new Date(list.date_created).toLocaleDateString()}</td>
+                        </tr>
+                    </table>
+                    
+                    <h6>Stats</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Total Members:</th>
+                            <td>${list.stats.member_count.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <th>Unsubscribed:</th>
+                            <td>${list.stats.unsubscribe_count.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <th>Cleaned:</th>
+                            <td>${list.stats.cleaned_count.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <th>Total Campaigns:</th>
+                            <td>${list.stats.campaign_count.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <th>Avg Sub Rate:</th>
+                            <td>${(list.stats.avg_sub_rate || 0).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <th>Avg Unsub Rate:</th>
+                            <td>${(list.stats.avg_unsub_rate || 0).toFixed(2)}</td>
+                        </tr>
+                    </table>
+                    
+                    <h6>Campaign Defaults</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th>From Name:</th>
+                            <td>${list.campaign_defaults.from_name}</td>
+                        </tr>
+                        <tr>
+                            <th>From Email:</th>
+                            <td>${list.campaign_defaults.from_email}</td>
+                        </tr>
+                        <tr>
+                            <th>Subject:</th>
+                            <td>${list.campaign_defaults.subject}</td>
+                        </tr>
+                        <tr>
+                            <th>Language:</th>
+                            <td>${list.campaign_defaults.language}</td>
+                        </tr>
+                    </table>
+                    
+                    <h6>Contact Info</h6>
+                    <address>
+                        ${list.contact.company}<br>
+                        ${list.contact.address1}<br>
+                        ${list.contact.city}, ${list.contact.state} ${list.contact.zip}<br>
+                        ${list.contact.country}
+                    </address>
+                    
+                    <h6>Signup Form URL</h6>
+                    <div class="input-group">
+                        <input type="text" class="form-control" value="${list.subscribe_url_long}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText('${list.subscribe_url_long}')">
+                            Copy
+                        </button>
+                    </div>
+                `;
+                
+                listContent.innerHTML = html;
+                resultContainer.classList.remove('d-none');
+                
+            } else {
+                throw new Error(response.error?.detail || 'Failed to get list info');
+            }
+            
+        } catch (error) {
+            listContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error: ${error.message}
+                </div>
+            `;
+            resultContainer.classList.remove('d-none');
+        }
+    }
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const listId = document.getElementById('list-id').value || null;
+        await displayListInfo(listId);
+    });
+    
+    // Get All Lists
+    document.getElementById('get-all-lists').addEventListener('click', async function() {
+        try {
+            const response = await mailchimp.getLists();
+            if (response.success) {
+                const lists = response.data.lists || [];
+                let html = '<h6 class="mt-4">All Lists</h6>';
+                if (lists.length > 0) {
+                    html += '<div class="list-group">';
+                    lists.forEach(list => {
+                        html += `
+                            <a href="#" class="list-group-item list-group-item-action" 
+                               onclick="document.getElementById('list-id').value='${list.id}'; document.getElementById('get-list-form').dispatchEvent(new Event('submit')); return false;">
+                                <strong>${list.name}</strong><br>
+                                <small>ID: ${list.id} | Members: ${list.stats.member_count}</small>
+                            </a>
+                        `;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<p>No lists found</p>';
+                }
+                listContent.innerHTML += html;
+            }
+        } catch (error) {
+            alert('Error getting lists: ' + error.message);
+        }
+    });
+    
+    // Get Segments
+    document.getElementById('get-segments').addEventListener('click', async function() {
+        try {
+            const response = await mailchimp.getSegments();
+            if (response.success) {
+                const segments = response.data.segments || [];
+                let html = '<h6 class="mt-4">Segments</h6>';
+                if (segments.length > 0) {
+                    html += '<ul class="list-group">';
+                    segments.forEach(segment => {
+                        html += `<li class="list-group-item">
+                            <strong>${segment.name}</strong> (ID: ${segment.id})<br>
+                            <small>Members: ${segment.member_count} | Type: ${segment.type}</small>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p>No segments found</p>';
+                }
+                listContent.innerHTML += html;
+            }
+        } catch (error) {
+            alert('Error getting segments: ' + error.message);
+        }
+    });
+    
+    // Get Interest Categories
+    document.getElementById('get-interest-categories').addEventListener('click', async function() {
+        try {
+            const response = await mailchimp.getInterestCategories();
+            if (response.success) {
+                const categories = response.data.categories || [];
+                let html = '<h6 class="mt-4">Interest Categories</h6>';
+                if (categories.length > 0) {
+                    html += '<ul class="list-group">';
+                    categories.forEach(category => {
+                        html += `<li class="list-group-item">
+                            <strong>${category.title}</strong> (ID: ${category.id})<br>
+                            <small>Type: ${category.type}</small>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p>No interest categories found</p>';
+                }
+                listContent.innerHTML += html;
+            }
+        } catch (error) {
+            alert('Error getting categories: ' + error.message);
+        }
+    });
+});
+</script>
+
+<!-- Include required scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="{{ siteUrl }}mailchimp/resources/js/mailchimp.js"></script>
+{% endblock %}

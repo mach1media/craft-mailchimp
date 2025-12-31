@@ -1,0 +1,304 @@
+{#
+ # Mailchimp API Test Interface
+ # 
+ # Interactive testing tool for the Mailchimp module
+ # Access this at: /mailchimp/test
+ #}
+{% extends "_layout" %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">Mailchimp API Test Interface</h1>
+    
+    <div class="card">
+        <div class="card-body">
+            <form id="mailchimp-test-form">
+                {{ csrfInput() }}
+                
+                <div class="mb-3">
+                    <label for="method" class="form-label">HTTP Method</label>
+                    <select class="form-select" id="method" name="method">
+                        <option value="GET" selected>GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="endpoint" class="form-label">API Endpoint</label>
+                    <select class="form-select" id="endpoint" name="endpoint">
+                        <optgroup label="Lists">
+                            <option value="/lists">Get all lists</option>
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}">Get specific list</option>
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}/interest-categories">Get interest categories</option>
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}/segments">Get segments</option>
+                        </optgroup>
+                        <optgroup label="Members">
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}/members" selected>Get all members</option>
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}/members/{subscriber_hash}">Get specific member</option>
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}/members/{subscriber_hash}/activity">Get member activity</option>
+                            <option value="/lists/{{ getenv('MAILCHIMP_LIST_ID') ?: '{list_id}' }}/members/{subscriber_hash}/tags">Get member tags</option>
+                        </optgroup>
+                        <optgroup label="Campaigns">
+                            <option value="/campaigns">Get all campaigns</option>
+                            <option value="/campaigns/{campaign_id}">Get specific campaign</option>
+                            <option value="/campaigns/{campaign_id}/content">Get campaign content</option>
+                        </optgroup>
+                        <optgroup label="Automations">
+                            <option value="/automations">Get all automations</option>
+                            <option value="/automations/{workflow_id}">Get specific automation</option>
+                        </optgroup>
+                        <optgroup label="Search">
+                            <option value="/search-members">Search members</option>
+                        </optgroup>
+                        <option value="custom">Custom endpoint</option>
+                    </select>
+                    <input type="text" class="form-control mt-2 d-none" id="custom-endpoint" placeholder="Enter custom endpoint">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email Address (for member lookup)</label>
+                    <input type="email" class="form-control" id="email" placeholder="test@example.com">
+                    <small class="form-text text-muted">Will be MD5 hashed automatically for member endpoints</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="params" class="form-label">Additional Parameters (JSON format)</label>
+                    <textarea class="form-control" id="params" rows="3" placeholder='{"count": 10, "offset": 0}'>{}</textarea>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Send Request</button>
+                    <button type="button" class="btn btn-secondary" id="check-subscription">Quick Check Subscription</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {# Quick Actions #}
+    <div class="mt-4">
+        <h3>Quick Actions</h3>
+        <div class="btn-group flex-wrap" role="group">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="get-all-lists">Get All Lists</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="get-list-info">Get List Info</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="get-members">Get Members (first 5)</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="search-test">Search Test</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="batch-example">Batch Subscribe Example</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="webhook-info">Webhook Info</button>
+        </div>
+    </div>
+    
+    {# Response Display #}
+    <div class="mt-4">
+        <h3>Response</h3>
+        <div id="loading" class="alert alert-info d-none">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            Loading...
+        </div>
+        <pre id="response" class="bg-light p-3 rounded"><code>No request sent yet</code></pre>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('mailchimp-test-form');
+    const methodSelect = document.getElementById('method');
+    const endpointSelect = document.getElementById('endpoint');
+    const customEndpointInput = document.getElementById('custom-endpoint');
+    const emailInput = document.getElementById('email');
+    const paramsTextarea = document.getElementById('params');
+    const responseDiv = document.getElementById('response');
+    const loadingDiv = document.getElementById('loading');
+    
+    // Initialize Mailchimp API wrapper
+    const mailchimp = new MailchimpAPI({
+        csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+        csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+        listId: '{{ getenv("MAILCHIMP_LIST_ID") }}',
+        debug: true,
+        onSuccess: function(result) {
+            console.log('Success:', result);
+        },
+        onError: function(error) {
+            console.error('Error:', error);
+        }
+    });
+    
+    // Display response in UI
+    function displayResponse(data) {
+        loadingDiv.classList.add('d-none');
+        responseDiv.innerHTML = '<code>' + JSON.stringify(data, null, 2) + '</code>';
+        
+        // Reset classes first
+        responseDiv.classList.remove('bg-danger', 'bg-light', 'text-white');
+        
+        // Highlight based on success
+        if (data.success) {
+            responseDiv.classList.add('bg-light');
+        } else {
+            responseDiv.classList.add('bg-danger', 'text-white');
+        }
+    }
+    
+    // Toggle custom endpoint input
+    endpointSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+            customEndpointInput.classList.remove('d-none');
+        } else {
+            customEndpointInput.classList.add('d-none');
+        }
+    });
+    
+    // Process endpoint with email hash
+    function processEndpoint(endpoint, email) {
+        if (email && endpoint.includes('{subscriber_hash}')) {
+            return endpoint.replace('{subscriber_hash}', mailchimp.md5(email));
+        }
+        return endpoint;
+    }
+    
+    // Handle form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const method = methodSelect.value;
+        let endpoint = endpointSelect.value === 'custom' ? customEndpointInput.value : endpointSelect.value;
+        const email = emailInput.value;
+        
+        // Validate email is provided for member-specific endpoints
+        if (endpoint.includes('{subscriber_hash}') && !email) {
+            alert('Please enter an email address for member-specific endpoints');
+            emailInput.focus();
+            return;
+        }
+        
+        // Process endpoint
+        endpoint = processEndpoint(endpoint, email);
+        
+        // Parse params
+        let params = {};
+        try {
+            params = JSON.parse(paramsTextarea.value || '{}');
+        } catch (e) {
+            alert('Invalid JSON in parameters field');
+            return;
+        }
+        
+        // Show loading
+        loadingDiv.classList.remove('d-none');
+        responseDiv.innerHTML = '<code>Sending request...</code>';
+        
+        // Make request using the wrapper
+        const result = await mailchimp.request(method, endpoint, params);
+        displayResponse(result);
+    });
+    
+    // Quick check subscription button
+    document.getElementById('check-subscription').addEventListener('click', async function() {
+        const email = emailInput.value;
+        if (!email) {
+            alert('Please enter an email address');
+            return;
+        }
+        
+        // Validate email
+        const validation = mailchimp.validateEmail(email);
+        if (!validation.valid) {
+            alert(validation.error);
+            emailInput.focus();
+            return;
+        }
+        
+        // Show loading
+        loadingDiv.classList.remove('d-none');
+        responseDiv.innerHTML = '<code>Checking subscription status...</code>';
+        
+        try {
+            // Use the abstracted getSubscriptionStatus method
+            const status = await mailchimp.getSubscriptionStatus(email);
+            displayResponse({
+                success: true,
+                data: status
+            });
+        } catch (error) {
+            displayResponse({
+                success: false,
+                error: error.message,
+                code: 500
+            });
+        }
+    });
+    
+    // Quick action handlers
+    document.getElementById('get-all-lists').addEventListener('click', async function() {
+        loadingDiv.classList.remove('d-none');
+        const result = await mailchimp.getLists();
+        displayResponse(result);
+    });
+    
+    document.getElementById('get-list-info').addEventListener('click', async function() {
+        loadingDiv.classList.remove('d-none');
+        const result = await mailchimp.getList();
+        displayResponse(result);
+    });
+    
+    document.getElementById('get-members').addEventListener('click', async function() {
+        loadingDiv.classList.remove('d-none');
+        const result = await mailchimp.getMembers({ count: 5, offset: 0 });
+        displayResponse(result);
+    });
+    
+    document.getElementById('search-test').addEventListener('click', async function() {
+        const query = prompt('Enter search query:');
+        if (query) {
+            loadingDiv.classList.remove('d-none');
+            const result = await mailchimp.searchMembers(query);
+            displayResponse(result);
+        }
+    });
+    
+    document.getElementById('batch-example').addEventListener('click', async function() {
+        const emails = prompt('Enter comma-separated email addresses:');
+        if (emails) {
+            const emailArray = emails.split(',').map(e => e.trim()).filter(e => e);
+            loadingDiv.classList.remove('d-none');
+            try {
+                const result = await mailchimp.batchSubscribe(emailArray);
+                displayResponse(result);
+            } catch (error) {
+                displayResponse({
+                    success: false,
+                    error: error.message,
+                    code: 500
+                });
+            }
+        }
+    });
+    
+    document.getElementById('webhook-info').addEventListener('click', async function() {
+        loadingDiv.classList.remove('d-none');
+        const response = await fetch('/actions/mailchimp/webhook/info', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                '{{ craft.app.config.general.csrfTokenName }}': '{{ craft.app.request.csrfToken }}'
+            })
+        });
+        const result = await response.json();
+        displayResponse(result);
+    });
+});
+</script>
+
+<!-- Include CryptoJS for MD5 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="{{ siteUrl }}mailchimp/resources/js/mailchimp.js"></script>
+{% endblock %}

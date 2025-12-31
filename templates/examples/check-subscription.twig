@@ -1,0 +1,135 @@
+{#
+ # Check Subscription Example
+ # 
+ # Shows how to check if an email is subscribed to your list
+ #}
+{% extends "_layout" %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">Check Subscription Status</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Enter Email to Check</h5>
+                    <form id="check-subscription-form">
+                        {{ csrfInput() }}
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="email" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Check Status</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div id="result-container" class="d-none">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Subscription Status</h5>
+                        <div id="status-content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Code Example #}
+    <div class="mt-5">
+        <h2>Code Example</h2>
+        <pre><code class="language-javascript">// Initialize the API
+const mailchimp = new MailchimpAPI({
+    csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+    csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+    listId: '{{ getenv("MAILCHIMP_LIST_ID") }}'
+});
+
+// Check subscription status
+const status = await mailchimp.getSubscriptionStatus(email);
+
+if (status.found) {
+    if (status.subscribed) {
+        console.log('Email is subscribed');
+    } else if (status.unsubscribed) {
+        console.log('Email is unsubscribed');
+    }
+} else {
+    console.log('Email not found in list');
+}</code></pre>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('check-subscription-form');
+    const resultContainer = document.getElementById('result-container');
+    const statusContent = document.getElementById('status-content');
+    
+    // Initialize API
+    const mailchimp = new MailchimpAPI({
+        csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+        csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+        listId: '{{ getenv("MAILCHIMP_LIST_ID") }}'
+    });
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('email').value;
+        
+        try {
+            const status = await mailchimp.getSubscriptionStatus(email);
+            
+            let html = '';
+            if (status.found) {
+                const statusClass = status.subscribed ? 'success' : 'warning';
+                const statusIcon = status.subscribed ? 'check-circle' : 'exclamation-circle';
+                
+                html = `
+                    <div class="alert alert-${statusClass}">
+                        <i class="fas fa-${statusIcon} me-2"></i>
+                        <strong>Status:</strong> ${status.status}
+                    </div>
+                    <p><strong>Email:</strong> ${status.email}</p>
+                    ${status.data ? `
+                        <p><strong>Member ID:</strong> ${status.data.id}</p>
+                        <p><strong>List ID:</strong> ${status.data.list_id}</p>
+                        ${status.data.merge_fields ? `
+                            <p><strong>Name:</strong> ${status.data.merge_fields.FNAME || ''} ${status.data.merge_fields.LNAME || ''}</p>
+                        ` : ''}
+                    ` : ''}
+                `;
+            } else {
+                html = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Email not found in list
+                    </div>
+                    <p>The email address <strong>${email}</strong> is not currently in your Mailchimp list.</p>
+                `;
+            }
+            
+            statusContent.innerHTML = html;
+            resultContainer.classList.remove('d-none');
+            
+        } catch (error) {
+            statusContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error: ${error.message}
+                </div>
+            `;
+            resultContainer.classList.remove('d-none');
+        }
+    });
+});
+</script>
+
+<!-- Include required scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="{{ siteUrl }}mailchimp/resources/js/mailchimp.js"></script>
+{% endblock %}

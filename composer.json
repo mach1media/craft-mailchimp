@@ -1,0 +1,38 @@
+{
+    "name": "rcg/craft-mailchimp",
+    "description": "Mailchimp API integration module for Craft CMS",
+    "type": "craft-module",
+    "keywords": ["craftcms", "mailchimp", "email", "newsletter", "marketing"],
+    "homepage": "https://github.com/mach1media/craft-mailchimp",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "RCG",
+            "homepage": "https://github.com/mach1media"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/mach1media/craft-mailchimp/issues",
+        "source": "https://github.com/mach1media/craft-mailchimp"
+    },
+    "require": {
+        "craftcms/cms": "^4.0.0",
+        "php": "^8.0.2",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "rcg\\mailchimp\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "extra": {
+        "name": "Craft Mailchimp",
+        "handle": "craft-mailchimp"
+    }
+}

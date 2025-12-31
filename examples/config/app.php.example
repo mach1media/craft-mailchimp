@@ -1,0 +1,17 @@
+<?php
+/**
+ * Example config/app.php configuration for Craft Mailchimp module
+ * 
+ * Add this to your existing config/app.php file
+ */
+
+use craft\helpers\App;
+
+return [
+    'id' => App::env('CRAFT_APP_ID') ?: 'CraftCMS',
+    'modules' => [
+        // Your existing modules...
+        'mailchimp' => \rcg\mailchimp\MailchimpModule::class,
+    ],
+    'bootstrap' => ['mailchimp'],
+];

@@ -1,0 +1,181 @@
+{#
+ # Signup URL Example
+ # 
+ # Shows how to get the hosted signup form URL for a list
+ #}
+{% extends "_layout" %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">Get List Signup URL</h1>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Hosted Signup Form URL</h5>
+                    <p>Each Mailchimp list has a hosted signup form URL that you can use to direct users to subscribe.</p>
+                    
+                    <form id="get-signup-url-form">
+                        {{ csrfInput() }}
+                        <div class="mb-3">
+                            <label for="list-id" class="form-label">List ID</label>
+                            <input type="text" class="form-control" id="list-id" 
+                                   value="{{ getenv('MAILCHIMP_LIST_ID') }}"
+                                   placeholder="Enter list ID or leave blank for default">
+                            <small class="text-muted">Leave blank to use default list from environment</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Get Signup URL</button>
+                    </form>
+                    
+                    <div id="result-container" class="mt-4 d-none">
+                        <div class="alert alert-success">
+                            <h6>Signup Form URL:</h6>
+                            <div class="input-group mt-2">
+                                <input type="text" class="form-control" id="signup-url" readonly>
+                                <button class="btn btn-outline-secondary" type="button" id="copy-url">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <a href="#" class="btn btn-outline-secondary" id="visit-url" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> Visit
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6>Usage Examples:</h6>
+                            <pre><code>&lt;!-- Direct Link --&gt;
+&lt;a href="<span id="example-url-1"></span>" target="_blank"&gt;Subscribe to our newsletter&lt;/a&gt;
+
+&lt;!-- Button --&gt;
+&lt;a href="<span id="example-url-2"></span>" class="btn btn-primary" target="_blank"&gt;
+    Subscribe Now
+&lt;/a&gt;
+
+&lt;!-- Redirect after unsubscribe --&gt;
+window.location.href = '<span id="example-url-3"></span>';</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div id="error-container" class="mt-4 d-none">
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <span id="error-message"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Code Example #}
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Code Examples</h5>
+                    
+                    <h6>JavaScript:</h6>
+                    <pre><code class="language-javascript">// Method 1: Using the helper method
+const signupUrl = await mailchimp.getListSignupUrl(listId);
+console.log('Signup URL:', signupUrl);
+
+// Method 2: From list info
+const listInfo = await mailchimp.getList(listId);
+if (listInfo.success) {
+    const signupUrl = listInfo.data.subscribe_url_long;
+    console.log('Signup URL:', signupUrl);
+}</code></pre>
+
+                    <h6>PHP/Twig:</h6>
+                    <pre><code class="language-php">// In PHP
+$module = \rcg\mailchimp\MailchimpModule::getInstance();
+$signupUrl = $module->api->getListSignupUrl($listId);
+
+// In Twig
+{% verbatim %}{% set module = craft.app.modules.mailchimp %}
+{% set response = module.api.get('/lists/' ~ listId) %}
+{% if response.success %}
+    {% set signupUrl = response.data.subscribe_url_long %}
+    <a href="{{ signupUrl }}">Subscribe</a>
+{% endif %}{% endverbatim %}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('get-signup-url-form');
+    const resultContainer = document.getElementById('result-container');
+    const errorContainer = document.getElementById('error-container');
+    const signupUrlInput = document.getElementById('signup-url');
+    const visitLink = document.getElementById('visit-url');
+    const errorMessage = document.getElementById('error-message');
+    
+    // Initialize API
+    const mailchimp = new MailchimpAPI({
+        csrfTokenName: '{{ craft.app.config.general.csrfTokenName }}',
+        csrfTokenValue: '{{ craft.app.request.csrfToken }}',
+        listId: '{{ getenv("MAILCHIMP_LIST_ID") }}'
+    });
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const listId = document.getElementById('list-id').value || null;
+        
+        // Hide previous results
+        resultContainer.classList.add('d-none');
+        errorContainer.classList.add('d-none');
+        
+        try {
+            // Get signup URL
+            const signupUrl = await mailchimp.getListSignupUrl(listId);
+            
+            if (signupUrl) {
+                // Display the URL
+                signupUrlInput.value = signupUrl;
+                visitLink.href = signupUrl;
+                
+                // Update examples
+                document.getElementById('example-url-1').textContent = signupUrl;
+                document.getElementById('example-url-2').textContent = signupUrl;
+                document.getElementById('example-url-3').textContent = signupUrl;
+                
+                resultContainer.classList.remove('d-none');
+            } else {
+                throw new Error('Signup URL not found for this list');
+            }
+            
+        } catch (error) {
+            errorMessage.textContent = error.message;
+            errorContainer.classList.remove('d-none');
+        }
+    });
+    
+    // Copy URL to clipboard
+    document.getElementById('copy-url').addEventListener('click', async function() {
+        try {
+            await navigator.clipboard.writeText(signupUrlInput.value);
+            
+            // Show feedback
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            this.classList.remove('btn-outline-secondary');
+            this.classList.add('btn-success');
+            
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.classList.remove('btn-success');
+                this.classList.add('btn-outline-secondary');
+            }, 2000);
+            
+        } catch (err) {
+            alert('Failed to copy URL');
+        }
+    });
+});
+</script>
+
+<!-- Include required scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="{{ siteUrl }}mailchimp/resources/js/mailchimp.js"></script>
+{% endblock %}

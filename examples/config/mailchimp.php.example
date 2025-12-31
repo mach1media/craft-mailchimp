@@ -1,0 +1,45 @@
+<?php
+/**
+ * Mailchimp module configuration
+ * 
+ * Copy this file to config/mailchimp.php to customize settings
+ */
+
+return [
+    // Enable webhook handling
+    'enableWebhooks' => true,
+    
+    // Secret key for webhook signature verification (optional)
+    // If set, webhooks will be verified using this secret
+    'webhookSecret' => getenv('MAILCHIMP_WEBHOOK_SECRET'),
+    
+    // API rate limiting (requests per minute)
+    'rateLimit' => 30,
+    
+    // Request timeout in seconds
+    'requestTimeout' => 120,
+    
+    // Enable debug logging
+    'debugMode' => getenv('CRAFT_ENVIRONMENT') === 'dev',
+    
+    // Custom merge field mappings (optional)
+    'mergeFieldMappings' => [
+        'firstName' => 'FNAME',
+        'lastName' => 'LNAME',
+        'birthday' => 'BIRTHDAY',
+        'phone' => 'PHONE',
+    ],
+    
+    // Default member tags for new subscribers
+    'defaultTags' => [
+        'craft-cms',
+        'website-signup'
+    ],
+    
+    // Blocked domains (in addition to default ones)
+    'blockedDomains' => [
+        '.tmp',
+        '.test',
+        // Add more domains as needed
+    ],
+];
