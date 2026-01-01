@@ -273,6 +273,80 @@ mix.js('src/js/app.js', 'public/dist/js')
    .sass('src/css/app.scss', 'public/dist/css');
 ```
 
+## Production Deployment
+
+### GitHub Actions Configuration
+
+**Important:** If you're using GitHub Actions for deployment, you must configure your workflow to properly handle git submodules. Without this, the module won't be available in production.
+
+#### Required GitHub Actions Steps
+
+Update your deployment workflow (`.github/workflows/deploy.yml`) with these changes:
+
+1. **Update the checkout action:**
+```yaml
+- name: Checkout Code
+  uses: actions/checkout@v4
+  with:
+    submodules: recursive
+    fetch-depth: 0
+```
+
+2. **Add submodule commands to your server deployment:**
+```yaml
+- name: Deploy to Server
+  run: |
+    ssh user@server << 'EOF'
+      cd /path/to/your/app
+      git pull origin main
+      echo "Initializing and updating git submodules..."
+      git submodule update --init --recursive
+      git submodule update --remote
+      echo "Installing composer dependencies..."
+      composer install --no-interaction --no-dev --optimize-autoloader
+      composer dump-autoload --optimize
+      # Your other deployment commands...
+    EOF
+```
+
+#### Why This Is Required
+
+Git submodules are **not automatically included** when you clone or pull a repository. The deployment process must explicitly:
+
+1. Initialize the submodule directories
+2. Fetch the submodule content
+3. Update the autoloader to recognize the new classes
+
+Without these steps, you'll encounter errors like:
+```
+Error: Failed to instantiate component or class "rcg\mailchimp\MailchimpModule"
+```
+
+### Other Deployment Systems
+
+For other deployment systems (Forge, Ploi, etc.), ensure your deployment script includes:
+
+```bash
+git submodule update --init --recursive
+git submodule update --remote
+composer dump-autoload --optimize
+```
+
+### Manual Server Setup
+
+If setting up manually on a server:
+
+```bash
+# Clone the repository
+git clone --recurse-submodules https://github.com/your-username/your-project.git
+
+# Or if already cloned without submodules
+git submodule update --init --recursive
+
+# Install dependencies
+composer install --no-dev --optimize-autoloader
+```
+
 ## Testing
 
 Integration test examples are provided in `tests/integration/`. These demonstrate how to test your Mailchimp integration.
