@@ -19,11 +19,29 @@ A thin wrapper module for the Mailchimp Marketing API v3 that provides transpare
 
 ## Installation
 
-### Via Git Submodule (Recommended)
+### Quick Installation (Automated)
+
+After adding the submodule, you can use the installation helper script:
+
+```bash
+# Add the submodule
+git submodule add https://github.com/mach1media/craft-mailchimp.git modules/craft-mailchimp
+
+# Run the installation helper
+bash modules/craft-mailchimp/install.sh
+```
+
+The script will:
+- Prompt you for your layout template path
+- Copy and update template files automatically
+- Set up JavaScript dependencies in the correct locations
+- Provide environment variable configuration reminders
+
+### Manual Installation
 
 1. Add the module as a git submodule:
 ```bash
-git submodule add https://github.com/mach1media/craft-mailchimp.git modules/mailchimp
+git submodule add https://github.com/mach1media/craft-mailchimp.git modules/craft-mailchimp
 ```
 
 2. Update your `composer.json` autoload configuration:
@@ -31,7 +49,7 @@ git submodule add https://github.com/mach1media/craft-mailchimp.git modules/mail
 {
     "autoload": {
         "psr-4": {
-            "rcg\\mailchimp\\": "modules/mailchimp/src/"
+            "rcg\\mailchimp\\": "modules/craft-mailchimp/src/"
         }
     }
 }
@@ -47,6 +65,7 @@ composer dump-autoload
 MAILCHIMP_API_KEY="your-api-key-here"
 MAILCHIMP_LIST_ID="your-list-id"
 MAILCHIMP_SIGNUP_URL="https://mailchi.mp/yourdomain/signup"
+MAILCHIMP_SERVER_PREFIX=""  # Optional: e.g., "us19" (auto-detected if not set)
 ```
 
 5. Register the module in `config/app.php`:
@@ -57,6 +76,43 @@ return [
     ],
     'bootstrap' => ['mailchimp'],
 ];
+```
+
+6. **Copy and adapt the template files:**
+```bash
+# Create mailchimp templates directory
+mkdir -p templates/mailchimp
+
+# Copy example templates
+cp -r modules/craft-mailchimp/templates/* templates/mailchimp/
+
+# Update the templates to extend your project's layout
+# Edit each template to replace the default layout with your project's layout:
+# Change: {% extends "_layout" %}
+# To: {% extends "_layout/default" %} (or your project's actual layout path)
+```
+
+7. **Copy JavaScript dependencies to your web root:**
+
+For standard installations:
+```bash
+# Copy the mailchimp.js file to your public directory
+cp modules/craft-mailchimp/resources/js/mailchimp.js public/js/
+```
+
+For DDEV installations:
+```bash
+# Copy to your source directory if using a build process
+cp modules/craft-mailchimp/resources/js/mailchimp.js src/js/vendor/
+
+# Or copy directly to the public directory
+ddev exec cp modules/craft-mailchimp/resources/js/mailchimp.js public/js/
+```
+
+If using Laravel Mix or Webpack:
+```javascript
+// In your webpack.mix.js or webpack config
+mix.copy('modules/craft-mailchimp/resources/js/mailchimp.js', 'public/js/vendor/');
 ```
 
 ## Configuration
@@ -90,7 +146,7 @@ Include the JavaScript wrapper and CryptoJS for MD5 hashing:
 
 ```html
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-<script src="/modules/mailchimp/resources/js/mailchimp.js"></script>
+<script src="/js/mailchimp.js"></script> <!-- Or /js/vendor/mailchimp.js depending on your setup -->
 ```
 
 Initialize and use the API:
@@ -174,6 +230,48 @@ The module includes example templates in the `templates/examples/` directory:
 - `signup-url.twig` - Get the hosted signup form URL
 
 Access the test interface at `/mailchimp/test` after installation.
+
+## Template Customization
+
+### Adapting Templates to Your Project
+
+The example templates use a generic layout structure. When integrating into your project:
+
+1. **Update the layout inheritance:**
+   ```twig
+   {# Change from: #}
+   {% extends "_layout" %}
+   
+   {# To your project's layout: #}
+   {% extends "_layout/default" %}
+   ```
+
+2. **Adjust block names to match your layout:**
+   ```twig
+   {# If your layout uses different block names: #}
+   {% block main %}  {# instead of 'content' #}
+       <!-- Your content here -->
+   {% endblock %}
+   ```
+
+3. **Update asset paths:**
+   ```twig
+   {# Update JavaScript path based on your setup: #}
+   <script src="{{ siteUrl }}js/vendor/mailchimp.js"></script>
+   {# or #}
+   <script src="{{ alias('@web/dist/js/mailchimp.js') }}"></script>
+   ```
+
+### For Build Process Users (Laravel Mix, Webpack, etc.)
+
+If using a build process, update your configuration to include the Mailchimp JavaScript:
+
+```javascript
+// webpack.mix.js example
+mix.js('src/js/app.js', 'public/dist/js')
+   .copy('modules/craft-mailchimp/resources/js/mailchimp.js', 'public/dist/js/vendor/')
+   .sass('src/css/app.scss', 'public/dist/css');
+```
 
 ## Testing
 
