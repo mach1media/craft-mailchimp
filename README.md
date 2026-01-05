@@ -332,6 +332,34 @@ git submodule update --remote
 composer dump-autoload --optimize
 ```
 
+### Ploi Server - Adding SSH deploy key to github
+
+On your droplet, generate an SSH key for the ploi user:
+
+```
+sudo -u ploi ssh-keygen -t ed25519 -f /home/ploi/.ssh/id_ed25519 -N ""
+```
+
+Get the public key:
+
+```
+sudo cat /home/ploi/.ssh/id_ed25519.pub
+```
+
+In GitHub, go to your craft-mailchimp repository → Settings → Deploy keys → Add deploy key
+
+1. Paste the public key
+2. Give it a name like "ploi-servername"
+3. Check "Allow write access" if needed (probably not for a submodule)
+
+Then run:
+
+```
+git submodule sync
+git submodule update --init --recursive
+```
+
+
 ### Manual Server Setup
 
 If setting up manually on a server:
