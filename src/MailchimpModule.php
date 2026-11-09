@@ -32,10 +32,11 @@ class MailchimpModule extends Module
             ],
         ]);
 
-        // Register controllers
-        if (Craft::$app->getRequest()->getIsConsoleRequest()) {
-            $this->controllerNamespace = 'rcg\\mailchimp\\console\\controllers';
-        } else {
+        // Set path alias for the module
+        Craft::setAlias('@rcg/mailchimp', __DIR__);
+
+        // Register controllers (web only - no console commands)
+        if (!Craft::$app->getRequest()->getIsConsoleRequest()) {
             $this->controllerNamespace = 'rcg\\mailchimp\\controllers';
         }
 
